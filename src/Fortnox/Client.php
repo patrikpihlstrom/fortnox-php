@@ -27,9 +27,33 @@ class Client
         $this->_host = $host;
     }
 
+    public function getAccounts()
+    {
+        return $this->call('GET', 'accounts');
+    }
+
+    public function createInvoice($issues, $customerNumber)
+    {
+        $body = ['Invoice' => ['InvoiceRows' => [], 'CustomerNumber' => $customerNumber]];
+        foreach ($issues as $issue)
+        {
+            $row = ['DeliveredQuantity' => $this->_toHours($issue['to_bill']),
+                    'ArticleNumber' => 103,
+                    'Description' => $issue['key'] . ': ' . $issue['summary']];
+            $body['Invoice']['InvoiceRows'][] = $row;
+        }
+
+        if (!empty($body['Invoice']['InvoiceRows']))
+        {
+            return $this->call('POST', 'invoices', json_encode($body));
+        }
+
+        return ['status' => '400', 'message' => 'No issues specified.'];
+    }
+
     public function call($method, $entity, $body = null)
     {
-        $curl = curl_init($host . $entity);
+        $curl = curl_init($this->_host . $entity);
         $options = [
             'Access-Token: ' . $this->_accessToken,
             'Client-Secret: ' . $this->_clientSecret,
@@ -49,5 +73,11 @@ class Client
         $curlResponse = curl_exec($curl);
         curl_close($curl);
         return $curlResponse;
+    }
+
+    private function _toHours($time)
+    {
+        $time = explode(':', $time);
+        return floatval($time[0] + $time[1] * (1 / 60) + $time[2] * (1 / 3600));
     }
 }
