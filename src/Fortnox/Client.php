@@ -8,6 +8,7 @@
 
 namespace patrikpihlstrom\Fortnox;
 
+use Illuminate\Support\Facades\DB;
 
 class Client
 {
@@ -32,16 +33,28 @@ class Client
         return $this->call('GET', 'accounts');
     }
 
-    public function createInvoice($issues, $customerNumber)
+    public function createInvoice($issues, $customerNumber, $vars)
     {
+    	$prepend = $this->_parseExtraRows(json_decode(\App\Settings::get('prepend_rows'), true), $vars);
+		$append = $this->_parseExtraRows(json_decode(\App\Settings::get('append_rows'), true), $vars);
         $body = ['Invoice' => ['InvoiceRows' => [], 'CustomerNumber' => $customerNumber]];
-        foreach ($issues as $issue)
+        if (count($prepend) > 0)
+		{
+			$body['Invoice']['InvoiceRows'] = $prepend;
+		}
+        // TODO: use prepend & append rows from settings
+        foreach ($issues['issues'] as $issue)
         {
             $row = ['DeliveredQuantity' => $this->_toHours($issue['to_bill']),
-                    'ArticleNumber' => 103,
+                    'ArticleNumber' => intval(\App\Settings::get('article_number')),
                     'Description' => $issue['key'] . ': ' . $issue['summary']];
             $body['Invoice']['InvoiceRows'][] = $row;
         }
+
+        foreach ($append as $row)
+		{
+			$body['Invoice']['InvoiceRows'][] = $row;
+		}
 
         if (!empty($body['Invoice']['InvoiceRows']))
         {
@@ -80,4 +93,35 @@ class Client
         $time = explode(':', $time);
         return floatval($time[0] + $time[1] * (1 / 60) + $time[2] * (1 / 3600));
     }
+
+    private function _parseExtraRows($rows, $vars)
+	{
+		foreach ($rows as $i => $row)
+		{
+			foreach ($row as $key => $val)
+			{
+				$_vars = $this->_getVars($val);
+				foreach ($_vars as $var)
+				{
+					if (array_key_exists(str_replace('$', '', $var), $vars))
+					{
+						$val = str_replace('{'."$var".'}', $vars[str_replace('$', '', $var)], $val);
+					}
+				}
+
+				$row[$key] = $val;
+			}
+
+			$rows[$i] = $row;
+		}
+		return $rows;
+	}
+
+	private function _getVars($string)
+	{
+		$math = [];
+		if (preg_match_all('/{(.*?)}/', $string, $match) > 0) {
+			return count($match) > 1 ? $match[1]:[];
+		}
+	}
 }
