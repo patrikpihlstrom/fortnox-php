@@ -47,7 +47,7 @@ class Client
         {
             $row = ['DeliveredQuantity' => $this->_toHours($issue['to_bill']),
                     'ArticleNumber' => intval(\App\Settings::get('article_number')),
-                    'Description' => $issue['key'] . ': ' . $issue['summary']];
+                    'Description' => $this->_getKey($issue) . ': ' . $issue['summary']];
             $body['Invoice']['InvoiceRows'][] = $row;
         }
 
@@ -123,5 +123,19 @@ class Client
 		if (preg_match_all('/{(.*?)}/', $string, $match) > 0) {
 			return count($match) > 1 ? $match[1]:[];
 		}
+	}
+
+	/**
+	 * Checks if the issue has a freshdesk issue. If so, use the freshdesk id as the key instead of the jira id.
+	 * @param array $issue
+	 */
+	private function _getKey($issue)
+	{
+		if (isset($issue['freshdesk']))
+		{
+			return explode(' ', $issue['freshdesk'])[0];
+		}
+
+		return $issue['key'];
 	}
 }
